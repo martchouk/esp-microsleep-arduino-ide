@@ -1,70 +1,75 @@
-# esp-microsleep
+# esp-microsleep (Arduino-compatible version)
 
-A replacement for FreeRTOS `vTaskDelay` with subtick granularity.
+This is an **Arduino IDE–compatible version** of [Michael Lutz’s original `esp-microsleep`](https://github.com/mickeyl/esp-microsleep) project. It allows **ESP32-based Arduino sketches** to perform sub-millisecond task delays without blocking the CPU or triggering watchdog resets.
 
-## Why?
+---
 
-Due to the way FreeRTOS works, it is impossible to achieve fine-grained
-delays in the millisecond or sub-millisecond region.
-Busy waiting is no alternative, since you will a) burn cycles and b) might
-trigger the FreeRTOS task watchdog.
+## ✨ Features
 
-## How?
+- ✅ Microsecond-precision delays for ESP32 FreeRTOS tasks
+- ✅ Works seamlessly in Arduino IDE 2.x+
+- ✅ Non-blocking: uses `taskYIELD()` to avoid CPU hogging
+- ✅ Automatically uses `vTaskDelay()` for delays ≥ 1 ms
+- ✅ Lightweight and hardware-backed (uses `esp_timer_get_time()`)
 
-This little ESP-IDF component fixes this by leveraging the `esp_timer`
-subsystem. The currently running task starts a timer and waits
-for a notification from the timer's ISR.
+---
 
-## Installation
+## 📦 Installation
 
-1. Adjust your `idf_component.yml` file to depend on this component:
+### Option 1: Add via ZIP
+1. Download this repo as a ZIP file
+2. Open **Arduino IDE**
+3. Go to **Sketch → Include Library → Add .ZIP Library...**
+4. Select the downloaded ZIP
 
-```yml
-dependencies:
-    mickeyl/esp_microsleep:
-        git: "https://github.com/mickeyl/esp-microsleep.git"
-```
+### Option 2: Install via GitHub (Arduino IDE 2.x)
+1. Open Arduino IDE
+2. Go to **Sketch → Include Library → Add Library → Install from GitHub**
+3. Enter your fork's URL: https://github.com/martchouk/esp-microsleep-arduino-ide
 
-2. Configure your project to allow for esp_timer dispatching via ISR:
+---
 
-   `CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD=y`
-3. Configure the proper amount of thread local storage.
-   If you're not using thread local storage elsewhere in your app, 2 will be enough:
+## 🛠️ Usage Example
 
-   `CONFIG_FREERTOS_THREAD_LOCAL_STORAGE_POINTERS=2`
-4. Configure the appropriate thread local storage index:
-
-   `CONFIG_ESP_MICROSLEEP_TLS_INDEX=1`
-
-## Usage
-
-```c
-// Include the header file.
+```cpp
 #include <esp_microsleep.h>
 
-// Calibrate the compensation value (for more accurate sleep times).
-esp_microsleep_calibrate();
+void setup() {
+  Serial.begin(115200);
+}
 
-// Call to delay the currently running task for 400 µs.
-esp_microsleep_delay(400);
+void loop() {
+  Serial.println("Sleeping for 500 microseconds...");
+  esp_microsleep(500);  // precise sleep
+}
 ```
 
-## Implementation Notes
+---
 
-While the task is "waiting" for the notification to arrive,
-it is suspended via `xTaskNotifyWait`.
+## 📁 Project Structure
 
-Since it takes a while from the timer alarm
-to get the task notification processed, you
-may achieve slightly longer sleep times than requested.
+```
+esp-microsleep-arduino/
+├── LICENSE
+├── README.md
+├── library.properties
+├── src/
+│   ├── esp_microsleep.c
+│   └── esp_microsleep.h
+└── examples/
+    └── MicrosleepDemo/
+        └── MicrosleepDemo.ino
+```
 
-To compensate for that, you should call `esp_microsleep_calibrate()`
-which computes a value suitable for your system.
+---
 
-## License
+## 📚 License and Attribution
 
-MIT.
+This library is based on [esp-microsleep](https://github.com/mickeyl/esp-microsleep)  
+by Dr. Michael 'Mickey' Lauer (© 2024), and is licensed under the MIT License.
 
-## Maintainer
+This fork adapts the original ESP-IDF component to be compatible with the Arduino IDE.  
+No functional changes were made.
 
-This component is maintained by Dr. Michael 'Mickey' Lauer <mlauer@vanille-media.de>
+This project includes the original LICENSE file as required by the license terms.
+
