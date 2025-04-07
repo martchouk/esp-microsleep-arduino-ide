@@ -69,7 +69,6 @@ This library is based on [esp-microsleep](https://github.com/mickeyl/esp-microsl
 by Dr. Michael 'Mickey' Lauer (© 2024), and is licensed under the MIT License.
 
 This fork adapts the original ESP-IDF component to be compatible with the Arduino IDE.  
-No functional changes were made.
 
 This project includes the original LICENSE file as required by the license terms.
 
