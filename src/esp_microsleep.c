@@ -53,16 +53,24 @@ static void esp_microsleep_timer_delete_callback(int index, void *pvHandle) {
     }
 }
 
+// NOTE: We no longer need IRAM_ATTR here since it's not a direct ISR handler,
+// but leaving it is harmless.
 static void IRAM_ATTR esp_microsleep_isr_handler(void* arg) {
     TaskHandle_t task = (TaskHandle_t)(arg);
     BaseType_t higherPriorityTaskWoken = pdFALSE;
+
+    // This function is safe to call from the high-priority timer task context.
     vTaskNotifyGiveFromISR(task, &higherPriorityTaskWoken);
-    
-    // This is the function the linker couldn't find
-    esp_timer_isr_dispatch_need_yield();
+
+    // We no longer call esp_timer_isr_dispatch_need_yield()
+    // The timer task handles yielding if necessary.
+    if (higherPriorityTaskWoken) {
+        portYIELD_FROM_ISR();
+    }
 }
 
 uint64_t esp_microsleep_calibrate() {
+    // Calibration logic remains the same
     const int calibration_loops = 10;
     const uint64_t calibration_usec = 100;
     uint64_t compensation = 0;
@@ -81,16 +89,14 @@ uint64_t esp_microsleep_calibrate() {
 esp_err_t esp_microsleep_delay(uint64_t us) {
     esp_timer_handle_t timer = (esp_timer_handle_t) pvTaskGetThreadLocalStoragePointer(NULL, CONFIG_ESP_MICROSLEEP_TLS_INDEX);
     if (!timer) {
-        // --- START OF CRITICAL FIX ---
-        // We explicitly cast our IRAM_ATTR function to the expected function pointer type.
-        // This provides the necessary hint to the linker.
+        // --- THE ONLY CHANGE IS HERE ---
         const esp_timer_create_args_t oneshot_timer_args = {
-            .callback = &esp_microsleep_isr_handler, // Use the address-of operator for clarity
+            .callback = &esp_microsleep_isr_handler,
             .arg = (void*) xTaskGetCurrentTaskHandle(),
-            .dispatch_method = ESP_TIMER_ISR,
-            .name = "microsleep_timer" // Giving it a name is good practice
+            .dispatch_method = ESP_TIMER_TASK, // Use TASK dispatch instead of ISR
+            .name = "microsleep_timer"
         };
-        // --- END OF CRITICAL FIX ---
+        // --- END OF CHANGE ---
 
         esp_err_t err = esp_timer_create(&oneshot_timer_args, &timer);
         if (err != ESP_OK) {
@@ -113,6 +119,8 @@ esp_err_t esp_microsleep_delay(uint64_t us) {
     if (err != ESP_OK) {
         return err;
     }
+    
+    // This correctly waits for the notification sent by our callback
     xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
     return ESP_OK;
 }
