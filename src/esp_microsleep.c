@@ -46,40 +46,28 @@
 
 static uint64_t esp_microsleep_compensation = 0;
 
-/**
- * @brief Callback function automatically invoked by FreeRTOS when a task using
- *        esp_microsleep_delay is deleted. This function cleans up the associated timer resource.
- *
- * @param index TLS index (unused in this context).
- * @param pvHandle Timer handle (`esp_timer_handle_t`) stored in TLS.
- */
-static void esp_microsleep_timer_delete_callback(int index, void *pvHandle)
-{
+static void esp_microsleep_timer_delete_callback(int index, void *pvHandle) {
     if (pvHandle) {
         esp_timer_handle_t timer = (esp_timer_handle_t)pvHandle;
-        // It's generally safe to delete timers that are running or stopped.
         esp_timer_delete(timer);
     }
 }
 
-/**
- * @brief ISR handler called when the one-shot timer expires.
- *        Notifies the task that initiated the delay.
- */
 static void IRAM_ATTR esp_microsleep_isr_handler(void* arg) {
     TaskHandle_t task = (TaskHandle_t)(arg);
     BaseType_t higherPriorityTaskWoken = pdFALSE;
     vTaskNotifyGiveFromISR(task, &higherPriorityTaskWoken);
+    
+    // This is the function the linker couldn't find
     esp_timer_isr_dispatch_need_yield();
 }
 
 uint64_t esp_microsleep_calibrate() {
-
     const int calibration_loops = 10;
     const uint64_t calibration_usec = 100;
     uint64_t compensation = 0;
 
-    esp_microsleep_delay(0); // to preheat the timer for this task
+    esp_microsleep_delay(0);
     for (int i = 0; i < calibration_loops; i++) {
         uint64_t start = esp_timer_get_time();
         esp_microsleep_delay(calibration_usec);
@@ -91,52 +79,42 @@ uint64_t esp_microsleep_calibrate() {
 }
 
 esp_err_t esp_microsleep_delay(uint64_t us) {
-
-    // Retrieve the timer handle associated with the calling task from Task Local Storage (TLS).
-    // This allows each task to have its own timer instance without needing global variables
-    // or complex management, especially crucial since timers are associated with specific task notifications.
     esp_timer_handle_t timer = (esp_timer_handle_t) pvTaskGetThreadLocalStoragePointer(NULL, CONFIG_ESP_MICROSLEEP_TLS_INDEX);
     if (!timer) {
-        // If no timer exists for this task, create one.
+        // --- START OF CRITICAL FIX ---
+        // We explicitly cast our IRAM_ATTR function to the expected function pointer type.
+        // This provides the necessary hint to the linker.
         const esp_timer_create_args_t oneshot_timer_args = {
-            .callback = esp_microsleep_isr_handler,
-            .arg = (void*) xTaskGetCurrentTaskHandle(), // Pass task handle to ISR
-            .dispatch_method = ESP_TIMER_ISR, // Use ISR dispatch for minimal latency
+            .callback = &esp_microsleep_isr_handler, // Use the address-of operator for clarity
+            .arg = (void*) xTaskGetCurrentTaskHandle(),
+            .dispatch_method = ESP_TIMER_ISR,
+            .name = "microsleep_timer" // Giving it a name is good practice
         };
+        // --- END OF CRITICAL FIX ---
+
         esp_err_t err = esp_timer_create(&oneshot_timer_args, &timer);
         if (err != ESP_OK) {
-            return err; // Failed to create timer
+            return err;
         }
-        // Store the newly created timer handle in the task's TLS for future use.
-        // Register the deletion callback to automatically clean up the timer when the task exits.
-        vTaskSetThreadLocalStoragePointerAndDelCallback(NULL,                           // Task handle (NULL for current task)
-                                                        CONFIG_ESP_MICROSLEEP_TLS_INDEX, // TLS index
-                                                        (void*) timer,                   // Pointer to store (timer handle)
-                                                        esp_microsleep_timer_delete_callback); // Deletion callback
+        vTaskSetThreadLocalStoragePointerAndDelCallback(NULL,
+                                                        CONFIG_ESP_MICROSLEEP_TLS_INDEX,
+                                                        (void*) timer,
+                                                        esp_microsleep_timer_delete_callback);
     }
 
-    if (us == 0) { return ESP_OK; } // No delay requested.
+    if (us == 0) { return ESP_OK; }
 
-    // Compensation Logic:
-    // Setting up and handling the esp_timer introduces a small overhead.
-    // For very short delays, this overhead can be significant compared to the requested delay.
-    // 'esp_microsleep_compensation' (calculated by esp_microsleep_calibrate) estimates this overhead.
-    // If the requested delay 'us' is less than or equal to the compensation value,
-    // it's more efficient to use the busy-waiting ets_delay_us function directly.
     if (us <= esp_microsleep_compensation) {
         ets_delay_us(us);
         return ESP_OK;
     }
 
-    // For delays longer than the compensation overhead, use the esp_timer.
-    // Start the one-shot timer for the requested duration minus the compensation value.
     esp_err_t err = esp_timer_start_once(timer, us - esp_microsleep_compensation);
     if (err != ESP_OK) {
-        return err; // Failed to start timer
+        return err;
     }
-    // Wait for notification from the ISR handler indicating the timer has expired.
-    xTaskNotifyWait(0, 0, NULL, portMAX_DELAY); // or ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    return ESP_OK; // Delay completed successfully
+    xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
+    return ESP_OK;
 }
 
-#endif // CONFIG_ESP_MICROSLEEP_TLS_INDEX
+#endif
