@@ -2,19 +2,15 @@
 
 This is an **Arduino IDE–compatible version** of [Michael Lutz’s original `esp-microsleep`](https://github.com/mickeyl/esp-microsleep) project. It allows **ESP32-based Arduino sketches** to perform sub-millisecond task delays without blocking the CPU or triggering watchdog resets.
 
----
+## Features
 
-## ✨ Features
+- Microsecond-precision delays for ESP32 FreeRTOS tasks
+- Works seamlessly in Arduino IDE 2.x+
+- Non-blocking: uses `taskYIELD()` to avoid CPU hogging
+- Automatically uses `vTaskDelay()` for delays ≥ 1 ms
+- Lightweight and hardware-backed (uses `esp_timer_get_time()`)
 
-- ✅ Microsecond-precision delays for ESP32 FreeRTOS tasks
-- ✅ Works seamlessly in Arduino IDE 2.x+
-- ✅ Non-blocking: uses `taskYIELD()` to avoid CPU hogging
-- ✅ Automatically uses `vTaskDelay()` for delays ≥ 1 ms
-- ✅ Lightweight and hardware-backed (uses `esp_timer_get_time()`)
-
----
-
-## 📦 Installation
+## Installation
 
 ### Option 1: Add via ZIP
 1. Download this repo as a ZIP file
@@ -24,12 +20,10 @@ This is an **Arduino IDE–compatible version** of [Michael Lutz’s original `e
 
 ### Option 2: Install via GitHub (Arduino IDE 2.x)
 1. Open Arduino IDE
-2. Go to **Sketch → Include Library → Add Library → Install from GitHub**
+2. Go to **Sketch -> Include Library -> Add Library -> Install from GitHub**
 3. Enter your fork's URL: https://github.com/martchouk/esp-microsleep-arduino-ide
 
----
-
-## 🛠️ Usage Example
+## Usage Example
 
 ```cpp
 #include <esp_microsleep.h>
@@ -44,9 +38,7 @@ void loop() {
 }
 ```
 
----
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 esp-microsleep-arduino/
@@ -61,9 +53,7 @@ esp-microsleep-arduino/
         └── MicrosleepDemo.ino
 ```
 
----
-
-## 📚 License and Attribution
+## License and Attribution
 
 This library is based on [esp-microsleep](https://github.com/mickeyl/esp-microsleep)  
 by Dr. Michael 'Mickey' Lauer (© 2024), and is licensed under the MIT License.
